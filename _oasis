@@ -1,0 +1,17 @@
+OASISFormat: 0.4
+Name: Cipher
+Version: 0.1
+Synopsis: Command line tool for encrypting and decrypting messages
+Authors: Dan McHenry <danpmch@gmail.com>
+License: GPL
+BuildTools: ocamlbuild
+Plugins: META (0.4), DevFiles(0.4)
+
+Description: Cipher provides utilities for dealing with basic ciphers, like Cesar
+  shifts
+
+Executable "cipher"
+  Path: src
+  MainIs: cipher.ml
+
+
