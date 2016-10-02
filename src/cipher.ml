@@ -23,7 +23,6 @@ module Rotate (A : Alphabet) = struct
     |> of_int
 
    let rotNString (n : int) : A.letter list -> A.letter list = List.map (rotNLetter n)
-   let rot13 = rotNString 13
 
    let rotAll text : A.letter list list =
       let totalLetters = List.length A.letters in
