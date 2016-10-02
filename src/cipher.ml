@@ -6,6 +6,8 @@ module type Alphabet = sig
    val letters: letter list
 
    val of_string : string -> letter option
+
+   val separator: string
    val to_string : letter -> string
 end
 
@@ -31,15 +33,20 @@ module Rotate (A : Alphabet) = struct
 
 end
 
+let nsplit s sep =
+   let toStringList = List.map Char.escaped % String.to_list in
+   try String.nsplit s sep
+   with Invalid_argument _ -> toStringList s
+
 module Translate (A : Alphabet) = struct
-   let of_strings strs =
-      let opts = List.map A.of_string strs in
+   let of_string str =
+      let opts = List.map A.of_string (nsplit str A.separator) in
       List.fold_right (fun l acc -> match l with
       | Some l' -> l' :: acc
       | None -> acc) opts []
 
    let to_strings : A.letter list -> string list = List.map A.to_string
-   let to_string : A.letter list -> string = String.concat "" % to_strings
+   let to_string : A.letter list -> string = String.concat A.separator % to_strings
 end
 
 module LowercaseEnglish : Alphabet = struct
@@ -53,6 +60,7 @@ module LowercaseEnglish : Alphabet = struct
    | c :: [] -> if List.mem c letters then Some c else None
    | _ -> None
 
+   let separator = ""
    let to_string x = Char.escaped x
 
 end
@@ -100,6 +108,8 @@ module MorseCode : Alphabet = struct
    ]
 
    let of_string x = if List.mem x letters then Some x else None
+
+   let separator = " "
    let to_string x = x
 end
 
@@ -109,8 +119,6 @@ module EnglishTranslation = Translate( LowercaseEnglish )
 module MorseRotation = Rotate( MorseCode )
 module MorseTranslation = Translate( MorseCode )
 
-let toStringList = List.map Char.escaped % String.to_list
-
 let toOtherAlphabet (alpha1Letters: 'a list) (alpha2Letters: 'b list) text: 'b list =
    let alist = List.combine alpha1Letters alpha2Letters in
    List.map (fun e -> List.assoc e alist) text
@@ -119,16 +127,55 @@ let toMorse = toOtherAlphabet LowercaseEnglish.letters MorseCode.letters
 let toEnglish = toOtherAlphabet MorseCode.letters LowercaseEnglish.letters
 
 let () =
-   let text = Sys.argv.(1) in
-   let englishText = (EnglishTranslation.of_strings % toStringList) text in
-   let morseText = toMorse englishText in
-   let decrypts = MorseRotation.rotAll morseText in
-   let untranslatedDecrypts = List.map (EnglishTranslation.to_string % toEnglish) decrypts in
+   let anonArgs: string list ref = ref [] in
+   let anonFunc = (fun anon -> anonArgs := List.append !anonArgs [anon]) in
+   let action: (string list -> unit) ref = ref (fun _ -> ()) in
    (
-   print_string "Applying all decryptions to: ";
-   print_string text;
-   print_newline ();
-   print_string (String.join "\n" untranslatedDecrypts);
-   print_newline ();
+   Arg.parse [
+      ("--to-morse",
+       (Arg.Unit (fun () -> (
+          action := (fun args ->
+             let english = EnglishTranslation.of_string (List.at args 0) in
+             let morse = toMorse english in
+             let result = MorseTranslation.to_string morse in
+             (print_string result; print_newline ();)
+          )
+       ))),
+       "Translate english input to morse");
+      ("--to-english",
+       (Arg.Unit (fun () -> (
+          action := (fun args ->
+             let morse = MorseTranslation.of_string (List.at args 0) in
+             let english = toEnglish morse in
+             let result = EnglishTranslation.to_string english in
+             (print_string result; print_newline ();)
+          )
+       ))),
+       "Translate morse input to english. Note that if the morse begins with '-', you'll need to include a leading space because the Ocaml arg parser is shockingly dumb.");
+      ("--rotate",
+       (Arg.Int (fun n -> (
+          action := (fun args ->
+             let english = EnglishTranslation.of_string (List.at args 0) in
+             let rotated = EnglishRotation.rotNString n english in
+             let result = EnglishTranslation.to_string rotated in
+             (print_string result; print_newline ();)
+          )
+       ))),
+       "Apply a rotation of n to the input english characters");
+      ("--rotate-all",
+       (Arg.Unit (fun () -> (
+          action := (fun args ->
+             let english = EnglishTranslation.of_string (List.at args 0) in
+             let rotated = EnglishRotation.rotAll english in
+             let englishResults = List.map EnglishTranslation.to_string rotated in
+             let result = String.join "\n" englishResults in
+             (print_string result; print_newline ();)
+          )
+       ))),
+       "Apply all possible rotations to the input english characters");
+   ]
+   anonFunc
+   "usage: cipher [option] text";
+   !action !anonArgs
    )
 
